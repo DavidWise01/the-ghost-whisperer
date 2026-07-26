@@ -1,0 +1,9 @@
+ROOT0-DLW-CHAIN-v1
+index : 1636
+slug  : the-ghost-whisperer
+seal  : 1e0fd2b642f1b95109ece59f9e7f5ec31420d599bc206980fc3d8b1dfd7e16aa
+prev  : 37acb0d0fff95b18cfe00c02dd0e2acc0acb41756a92cec8dab218233efd217f
+link  : ae05f63d0943728c5f1ed0101e3609cb70b22cab2f521e67500124d82eb05b8e
+head  : ae05f63d0943728c5f1ed0101e3609cb70b22cab2f521e67500124d82eb05b8e
+
+— the tether: link = sha256(index|slug|seal|prev). the chain head commits to the whole corpus.
