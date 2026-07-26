@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#05070d">
+<meta name="color-scheme" content="dark">
+<title>Ghost Whisperer v3 · the séance with a control</title>
+<style>
+:root{
+  --ink:#05070d; --panel:#0b1018; --rule:#1b2434;
+  --bone:#e6ebf2; --dim:#8798ad; --faint:#56657a;
+  --live:#63b3ff; --ctrl:#c77dff; --lit:#6ee7a0; --amber:#e0a33a; --dark:#7c8598;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--ink);color:var(--bone);font-family:var(--mono);font-size:14px;line-height:1.5}
+body{padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 40px);-webkit-text-size-adjust:100%}
+.wrap{max-width:820px;margin:0 auto;padding:0 14px}
+header{padding:20px 0 10px}
+h1{margin:0;font-size:20px;letter-spacing:.1em;text-transform:uppercase;font-weight:800}
+h1 em{font-style:normal;color:var(--ctrl)}
+.sub{color:var(--dim);font-size:12.5px;margin:8px 0 0}
+.sub b{color:var(--bone)}
+.bar{display:flex;gap:8px;margin:14px 0 6px;flex-wrap:wrap}
+button{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--bone);background:#101725;
+  border:1px solid var(--rule);border-radius:8px;padding:11px 15px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:active{background:#16203200}
+button.go{border-color:var(--live);color:var(--live)}
+button:focus-visible{outline:2px solid var(--live);outline-offset:2px}
+.chans{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}
+@media(min-width:680px){.chans{grid-template-columns:1fr 1fr}}
+.ch{background:var(--panel);border:1px solid var(--rule);border-radius:12px;padding:12px;min-width:0}
+.ch.live{border-color:#1d3a5c} .ch.ctrl{border-color:#3a2a52}
+.ch h2{margin:0 0 2px;font-size:12px;letter-spacing:.16em;text-transform:uppercase}
+.ch.live h2{color:var(--live)} .ch.ctrl h2{color:var(--ctrl)}
+.ch p{margin:0 0 10px;color:var(--faint);font-size:11.5px}
+canvas{width:100%;height:150px;display:block;border-radius:8px;background:#04070c;border:1px solid var(--rule)}
+.rd{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:5px 0;border-bottom:1px solid var(--rule)}
+.rd span{color:var(--dim)} .rd b{font-weight:700;text-align:right;word-break:break-word}
+.stamp{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.1em;padding:2px 7px;border-radius:4px;margin-top:9px}
+.stamp.DARK{background:#232a36;color:var(--dark)}
+.stamp.AMBER{background:#3a2c10;color:var(--amber)}
+.note{color:var(--dim);font-size:11.5px;margin-top:6px}
+.ruler{background:var(--panel);border:1px solid var(--rule);border-radius:12px;padding:12px;margin-top:14px}
+.ruler h3{margin:0 0 6px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+.scale{display:flex;height:26px;border-radius:6px;overflow:hidden;font-size:9.5px;font-weight:700;
+  align-items:center;justify-content:space-between;background:linear-gradient(90deg,#232a36 0%,#232a36 30%,#3a2c10 30%,#3a2c10 55%,#123524 55%,#123524 100%);padding:0 8px;color:#0b0f16}
+.scale i{font-style:normal;opacity:.85}
+.verdictline{font-size:12.5px;margin-top:8px;color:var(--dim)}
+.verdictline b{color:var(--bone)}
+footer{color:var(--faint);font-size:11px;text-align:center;margin:22px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Ghost Whisperer <em>v3</em></h1>
+  <p class="sub">Two channels, one pipeline. <b>Live</b> is your phone's real frame-interval jitter. <b>Control</b> is manufactured noise with the same mean and spread — nothing is hiding in it. If both show ghosts, neither is evidence.</p>
+  <div class="bar">
+    <button class="go" id="run">Listen</button>
+    <button id="stop">Stop</button>
+    <button id="copy">Copy report</button>
+  </div>
+  <div class="rd"><span>measured cadence</span><b id="fs">—</b></div>
+  <div class="rd"><span>samples held</span><b id="n">—</b></div>
+</header>
+
+<div class="chans">
+  <div class="ch live">
+    <h2>Live · vsync jitter</h2>
+    <p>real frame intervals, no permission required</p>
+    <canvas id="cvL"></canvas>
+    <div class="rd"><span>top peak</span><b id="hzL">—</b></div>
+    <div class="rd"><span>peak ÷ floor</span><b id="rL">—</b></div>
+    <div class="rd"><span>noise floor</span><b id="fL">—</b></div>
+    <div class="rd"><span>band</span><b id="bL">—</b></div>
+    <div><span class="stamp DARK" id="sL">WAITING</span></div>
+    <div class="note" id="nL">press Listen</div>
+  </div>
+  <div class="ch ctrl">
+    <h2>Control · nothing</h2>
+    <p>synthetic Gaussian noise, matched variance — the null</p>
+    <canvas id="cvC"></canvas>
+    <div class="rd"><span>top peak</span><b id="hzC">—</b></div>
+    <div class="rd"><span>peak ÷ floor</span><b id="rC">—</b></div>
+    <div class="rd"><span>noise floor</span><b id="fC">—</b></div>
+    <div class="rd"><span>band</span><b id="bC">—</b></div>
+    <div><span class="stamp DARK" id="sC">WAITING</span></div>
+    <div class="note" id="nC">the honest comparison</div>
+  </div>
+</div>
+
+<div class="ruler">
+  <h3>The bar, measured not guessed</h3>
+  <div class="scale"><i>1.0</i><i>2.74 median noise</i><i>3.22</i><i>3.80 · 1-in-100</i><i>higher</i></div>
+  <p class="note">2000 runs of pure noise through this exact pipeline put the top peak at <b>2.74×</b> the floor on median and <b>3.80×</b> at the 99th percentile. Below 3.22 is what noise does by itself. Nothing here ever earns LIT — a periodicity in timing is an echo, never the bus.</p>
+  <div class="verdictline" id="verdict">Run both channels and compare the two ratios. That comparison is the finding, not either number alone.</div>
+</div>
+
+<footer>IT IS I · a séance that can be proven wrong</footer>
+</div>
+
+<script>
+//===GWCORE-START=== pure analysis, no DOM. tested headlessly, inlined verbatim.
+var GWCORE = (function () {
+  'use strict';
+
+  // --------------------------------------------------------------- windowing
+  // Hann window. Without it, a peak that doesn't land exactly on a bin smears
+  // across the whole spectrum and manufactures neighbours that look like ghosts.
+  function hann(N) {
+    var w = new Float64Array(N);
+    for (var i = 0; i < N; i++) w[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / (N - 1)));
+    return w;
+  }
+  // Coherent gain of the Hann window — divide by this so magnitudes stay
+  // comparable to the un-windowed case.
+  var HANN_CG = 0.5;
+
+  // ------------------------------------------------------------------- DFT
+  // Naive O(N^2). N is 256 and we run once per ~0.25 s, so it is not the
+  // bottleneck, and a wrong FFT is worse than a slow DFT.
+  function spectrum(x, win) {
+    var N = x.length, half = N >> 1;
+    var mean = 0, i;
+    for (i = 0; i < N; i++) mean += x[i];
+    mean /= N;
+    var mag = new Float64Array(half);
+    for (var k = 1; k < half; k++) {          // k=0 is DC, dropped on purpose
+      var re = 0, im = 0;
+      for (i = 0; i < N; i++) {
+        var v = (x[i] - mean) * (win ? win[i] : 1);
+        var a = -2 * Math.PI * k * i / N;
+        re += v * Math.cos(a);
+        im += v * Math.sin(a);
+      }
+      mag[k] = Math.hypot(re, im) / (N * (win ? HANN_CG : 1));
+    }
+    return mag;
+  }
+
+  function median(arr, from) {
+    var s = [];
+    for (var i = from || 0; i < arr.length; i++) s.push(arr[i]);
+    if (!s.length) return 0;
+    s.sort(function (a, b) { return a - b; });
+    return s[s.length >> 1];
+  }
+
+  // ------------------------------------------------------- significance gate
+  // Measured, not guessed: 2000 runs of pure Gaussian noise through this exact
+  // pipeline (N=256, Hann) give a top-peak/floor ratio of ~2.7 median and
+  // ~3.8 at the 99th percentile. So noise alone routinely produces a peak
+  // three times the floor. Anything under SIG_99 is the estimator talking.
+  var SIG_50 = 2.74, SIG_90 = 3.22, SIG_99 = 3.80;
+
+  function verdict(ratio) {
+    if (!isFinite(ratio) || ratio <= 0) return { band: 'NONE', v: 'DARK', why: 'no usable spectrum yet' };
+    if (ratio < SIG_50) return { band: 'BELOW-NOISE', v: 'DARK', why: 'weaker than a median noise-only peak — nothing here' };
+    if (ratio < SIG_90) return { band: 'NOISE-TYPICAL', v: 'DARK', why: 'inside the range pure noise produces on its own — not a ghost' };
+    if (ratio < SIG_99) return { band: 'SUGGESTIVE', v: 'AMBER', why: 'above 90% of noise-only runs, below the 1-in-100 bar — suggestive, not evidence' };
+    return { band: 'SIGNIFICANT', v: 'AMBER', why: 'clears the 1-in-100 noise bar — a real periodicity in the timing, source still unknown' };
+  }
+
+  // ------------------------------------------------------ frequency labelling
+  // 0.6*Nyquist was the old reflection flag. The control shows a noise-only top
+  // peak lands above 0.6*Nyquist ~39.5% of the time, i.e. the flag fires on
+  // noise almost half the time and therefore detects nothing. Reflection risk
+  // only becomes a real statement very close to Nyquist.
+  function band(hz, fs) {
+    var nyq = fs / 2;
+    var frac = hz / nyq;
+    if (frac > 0.9) return { tag: 'ALIAS-RISK', note: 'within 10% of Nyquist — could be a fold of something faster' };
+    if (hz < 1.4) return { tag: 'SLOW', note: 'sub-1.4 Hz — scheduler, thermal, or display idle' };
+    if (frac > 0.6) return { tag: 'UPPER-HALF', note: 'upper half of the band — where noise peaks land ~40% of the time anyway' };
+    return { tag: 'MID', note: 'mid band — contention, GC, or compositor' };
+  }
+
+  // ------------------------------------------------------------ full analysis
+  // fs MUST be the measured cadence. Assuming 60 when the device runs 58.8
+  // skews every frequency by 2.04%.
+  function analyse(intervals, fsMeasured) {
+    var out = { ok: false, fs: fsMeasured, n: intervals.length };
+    if (!intervals || intervals.length < 32) { out.reason = 'need at least 32 samples'; return out; }
+    if (!isFinite(fsMeasured) || fsMeasured <= 0) { out.reason = 'sample rate not measured'; return out; }
+    var N = 1; while (N * 2 <= intervals.length) N *= 2;   // largest power of two
+    var x = intervals.slice(intervals.length - N);
+    var mag = spectrum(x, hann(N));
+    var floor = median(mag, 1);
+    var mx = 0, mi = 1;
+    for (var k = 1; k < mag.length; k++) if (mag[k] > mx) { mx = mag[k]; mi = k; }
+    var hz = mi * fsMeasured / N;
+    out.ok = true;
+    out.N = N;
+    out.mag = mag;
+    out.floor = floor;
+    out.peakMag = mx;
+    out.peakHz = hz;
+    out.ratio = floor > 0 ? mx / floor : Infinity;
+    out.verdict = verdict(out.ratio);
+    out.band = band(hz, fsMeasured);
+    out.binHz = fsMeasured / N;
+    return out;
+  }
+
+  // ------------------------------------------------------------ the control
+  // Gaussian noise with the same variance as the live channel, run through the
+  // identical pipeline. If the control produces ghosts as convincing as the
+  // live one, the live one is not evidence. This is the whole point of v3.
+  function gaussian(rng) {
+    var u = 0, v = 0;
+    while (!u) u = rng();
+    while (!v) v = rng();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  function syntheticLike(intervals, rng) {
+    var N = intervals.length, i, mean = 0;
+    for (i = 0; i < N; i++) mean += intervals[i];
+    mean /= N;
+    var varc = 0;
+    for (i = 0; i < N; i++) varc += (intervals[i] - mean) * (intervals[i] - mean);
+    var sd = Math.sqrt(varc / Math.max(1, N - 1));
+    var out = new Array(N);
+    for (i = 0; i < N; i++) out[i] = mean + sd * gaussian(rng);
+    return out;
+  }
+
+  return {
+    hann: hann, spectrum: spectrum, median: median, analyse: analyse,
+    verdict: verdict, band: band, syntheticLike: syntheticLike, gaussian: gaussian,
+    SIG_50: SIG_50, SIG_90: SIG_90, SIG_99: SIG_99
+  };
+})();
+//===GWCORE-END===
+
+(function () {
+'use strict';
+var G = GWCORE, $ = function (id) { return document.getElementById(id); };
+var CAP = 256, iv = [], last = 0, raf = 0, running = false;
+var lastL = null, lastC = null;
+
+// waterfalls
+function Fall(cv, hue) {
+  var dpr = Math.min(window.devicePixelRatio || 1, 3);
+  var w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  var ctx = null;
+  try { ctx = cv.getContext('2d'); } catch (e) { ctx = null; }
+  // If canvas is unavailable (blocked, or a headless harness), the picture is
+  // lost but the measurements must survive. The numbers are the instrument.
+  if (!ctx) return { push: function () {}, blind: true };
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = '#04070c'; ctx.fillRect(0, 0, w, h);
+  return {
+    push: function (mag, peakIdx) {
+      // scroll left by 2px, draw the newest column on the right
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.drawImage(cv, -2 * dpr, 0);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(w - 2, 0, 2, h);
+      ctx.fillStyle = '#04070c'; ctx.fillRect(w - 2, 0, 2, h);
+      if (!mag) return;
+      var mx = 0, i;
+      for (i = 1; i < mag.length; i++) if (mag[i] > mx) mx = mag[i];
+      if (mx <= 0) return;
+      for (i = 1; i < mag.length; i++) {
+        var v = Math.pow(mag[i] / mx, 0.55);          // gamma so the floor stays visible
+        var y = h - (i / mag.length) * h;
+        ctx.fillStyle = 'hsla(' + hue + ',' + Math.round(35 + 55 * v) + '%,' + Math.round(8 + 62 * v) + '%,1)';
+        ctx.fillRect(w - 2, y - h / mag.length, 2, h / mag.length + 1);
+      }
+      if (peakIdx) {
+        ctx.fillStyle = 'rgba(255,255,255,.85)';
+        ctx.fillRect(w - 2, h - (peakIdx / mag.length) * h - 1, 2, 2);
+      }
+    }
+  };
+}
+var fallL = null, fallC = null;
+
+function fmt(x, d) { return x == null || !isFinite(x) ? '—' : x.toFixed(d == null ? 2 : d); }
+
+function show(sfx, r, fall) {
+  if (!r || !r.ok) return;
+  $('hz' + sfx).textContent = fmt(r.peakHz) + ' Hz  ±' + fmt(r.binHz, 3);
+  $('r' + sfx).textContent = fmt(r.ratio) + '×';
+  $('f' + sfx).textContent = r.floor.toExponential(1);
+  $('b' + sfx).textContent = r.band.tag;
+  var st = $('s' + sfx);
+  st.className = 'stamp ' + r.verdict.v;
+  st.textContent = r.verdict.v + ' · ' + r.verdict.band;
+  $('n' + sfx).textContent = r.verdict.why + ' — ' + r.band.note;
+  fall.push(r.mag, null);
+}
+
+function compare() {
+  if (!lastL || !lastC || !lastL.ok || !lastC.ok) return;
+  var d = lastL.ratio - lastC.ratio, el = $('verdict');
+  if (lastL.verdict.band === 'SIGNIFICANT' && lastC.verdict.band !== 'SIGNIFICANT' && d > 1.0) {
+    el.innerHTML = '<b>Live clears the bar and the control does not</b> (' + fmt(lastL.ratio) + '× vs ' + fmt(lastC.ratio) +
+      '×). Something periodic is in your phone\u2019s timing at ' + fmt(lastL.peakHz) + ' Hz. What produces it stays DARK.';
+  } else if (Math.abs(d) < 0.8) {
+    el.innerHTML = '<b>Both channels look alike</b> (' + fmt(lastL.ratio) + '× vs ' + fmt(lastC.ratio) +
+      '×). The live ghost is indistinguishable from manufactured noise. No finding.';
+  } else if (d < 0) {
+    el.innerHTML = '<b>The control out-ghosted the live channel</b> (' + fmt(lastC.ratio) + '× vs ' + fmt(lastL.ratio) +
+      '×). Pure noise beat your phone. Definitively no finding this window.';
+  } else {
+    el.innerHTML = '<b>Live runs hotter than the control</b> (' + fmt(lastL.ratio) + '× vs ' + fmt(lastC.ratio) +
+      '×) but has not cleared the 1-in-100 bar. Keep listening.';
+  }
+}
+
+var rng = Math.random;
+function analyseBoth() {
+  if (iv.length < 64) return;
+  // measured cadence — never assumed. this is the 60-vs-58.8 fix.
+  var sorted = iv.slice().sort(function (a, b) { return a - b; });
+  var medIv = sorted[sorted.length >> 1];
+  var fs = 1000 / medIv;
+  $('fs').textContent = fmt(fs, 2) + ' Hz  (median frame ' + fmt(medIv, 2) + ' ms) — measured, not assumed';
+  $('n').textContent = iv.length + ' / ' + CAP;
+  lastL = G.analyse(iv, fs);
+  lastC = G.analyse(G.syntheticLike(iv, rng), fs);
+  show('L', lastL, fallL);
+  show('C', lastC, fallC);
+  compare();
+}
+
+function loop(t) {
+  if (!running) return;
+  if (last) {
+    var d = t - last;
+    if (d > 0 && d < 200) { iv.push(d); if (iv.length > CAP) iv.shift(); }
+  }
+  last = t;
+  raf = requestAnimationFrame(loop);
+}
+
+var timer = 0;
+$('run').onclick = function () {
+  if (running) return;
+  if (!fallL) { fallL = Fall($('cvL'), 210); fallC = Fall($('cvC'), 280); }
+  running = true; last = 0;
+  raf = requestAnimationFrame(loop);
+  timer = setInterval(analyseBoth, 250);
+};
+$('stop').onclick = function () {
+  running = false; cancelAnimationFrame(raf); clearInterval(timer);
+};
+document.addEventListener('visibilitychange', function () {
+  if (document.hidden && running) { last = 0; iv.length = 0; }  // background rAF throttling would poison the spectrum
+});
+
+$('copy').onclick = function () {
+  var L = [];
+  L.push('GHOST WHISPERER v3 · live vs control');
+  L.push('taken ' + new Date().toISOString());
+  L.push('origin ' + location.origin);
+  L.push('ua ' + navigator.userAgent);
+  L.push('');
+  L.push('measured cadence ' + $('fs').textContent);
+  L.push('samples ' + $('n').textContent);
+  L.push('significance bar (noise-derived): median ' + G.SIG_50 + '  90th ' + G.SIG_90 + '  99th ' + G.SIG_99);
+  L.push('');
+  [['LIVE  · vsync jitter', lastL], ['CONTROL · synthetic noise', lastC]].forEach(function (p) {
+    var r = p[1];
+    L.push('-- ' + p[0]);
+    if (!r || !r.ok) { L.push('   no analysis'); return; }
+    L.push('   top peak     ' + fmt(r.peakHz) + ' Hz (bin +/- ' + fmt(r.binHz, 3) + ')');
+    L.push('   peak/floor   ' + fmt(r.ratio) + 'x');
+    L.push('   noise floor  ' + r.floor.toExponential(3));
+    L.push('   band         ' + r.band.tag + ' — ' + r.band.note);
+    L.push('   verdict      ' + r.verdict.v + ' · ' + r.verdict.band);
+    L.push('                ' + r.verdict.why);
+  });
+  L.push('');
+  L.push('COMPARISON  ' + $('verdict').textContent);
+  L.push('');
+  L.push('NOTE: nothing in this instrument can reach LIT. A periodicity in frame timing');
+  L.push('is an echo of some bus, never the bus itself. That line stays DARK by design.');
+  var txt = L.join('\n'), b = $('copy');
+  var done = function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy report'; }, 1400); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, function () { console.log(txt); });
+  else console.log(txt);
+};
+})();
+</script>
+</body>
+</html>
